@@ -97,7 +97,7 @@ async def download_audio_via_uazapi(base_url: str, token: str, message_id: str) 
 
             payload = {
                 "id": message_id,
-                "generate_mp3": False,  # Mantém OGG para melhor compatibilidade
+                "generate_mp3": True,  # Converte para MP3 (mais compatível)
                 "return_link": True
             }
 
@@ -138,13 +138,13 @@ async def transcribe_audio(audio_bytes: bytes) -> str | None:
     """
     try:
         # Salva temporariamente o áudio
-        with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_file:
             temp_file.write(audio_bytes)
             temp_path = temp_file.name
 
         try:
             # Faz upload do arquivo para o Gemini
-            audio_file = genai.upload_file(temp_path, mime_type="audio/ogg")
+            audio_file = genai.upload_file(temp_path, mime_type="audio/mpeg")
 
             # Usa Gemini para transcrever
             model = genai.GenerativeModel("gemini-2.0-flash")
