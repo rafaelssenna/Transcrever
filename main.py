@@ -17,6 +17,16 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
+# Mensagens de erro amigáveis
+ERROR_MESSAGES = {
+    "download_failed": "Ops! Não consegui baixar o áudio. O arquivo pode ter expirado ou estar corrompido. Por favor, envie novamente.",
+    "transcription_failed": "Ops! Não consegui transcrever o áudio. Isso pode acontecer se o áudio estiver muito baixo, com muito ruído ou em um idioma não suportado. Tente enviar novamente.",
+    "timeout": "Ops! A transcrição demorou mais do que o esperado. Por favor, tente novamente em alguns instantes.",
+    "audio_expired": "Ops! Este áudio já expirou (mais de 24 horas). Por favor, envie o áudio novamente.",
+    "service_unavailable": "Ops! O serviço está temporariamente indisponível. Por favor, tente novamente em alguns minutos.",
+    "cancelled": "Ok! O áudio não será transcrito.",
+}
+
 # Ajusta URL para asyncpg se vier do Railway (postgres:// -> postgresql+asyncpg://)
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
@@ -139,7 +149,7 @@ async def handle_button_response(message: dict, base_url: str, token: str):
         audio_message_id = button_id[4:]  # Remove "nao_"
         await remove_pending_audio(audio_message_id)
         from_number = chat_id.replace("@s.whatsapp.net", "")
-        await send_message(from_number, "Ok! O áudio não será transcrito.", base_url, token)
+        await send_message(from_number, ERROR_MESSAGES["cancelled"], base_url, token)
 
     return {"status": "ok", "action": "button_handled"}
 
@@ -241,30 +251,44 @@ async def process_transcription(chat_id: str, message_id: str, base_url: str, to
     if pending:
         base_url = pending.base_url or base_url
         token = pending.token or token
+    elif not base_url or not token:
+        # Áudio não encontrado no banco e sem credenciais - provavelmente expirou
+        await send_message(from_number, ERROR_MESSAGES["audio_expired"], base_url, token)
+        return
+
+    # Avisa que está processando
+    await send_message(from_number, "Transcrevendo seu áudio, aguarde...", base_url, token)
 
     # Baixa o áudio
-    audio_bytes = await download_audio_via_uazapi(base_url, token, message_id)
+    audio_bytes, download_error = await download_audio_via_uazapi(base_url, token, message_id)
 
     if not audio_bytes:
-        await send_message(from_number, "Não consegui baixar o áudio. Tente enviar novamente.", base_url, token)
+        error_msg = ERROR_MESSAGES["download_failed"]
+        if download_error == "timeout":
+            error_msg = ERROR_MESSAGES["timeout"]
+        await send_message(from_number, error_msg, base_url, token)
         await remove_pending_audio(message_id)
         return
 
     # Transcreve
-    transcription = await transcribe_audio(audio_bytes)
+    transcription, transcribe_error = await transcribe_audio(audio_bytes)
 
     if transcription:
         await send_message(from_number, f"*Transcrição:*\n\n{transcription}", base_url, token)
     else:
-        await send_message(from_number, "Não consegui transcrever o áudio. Tente novamente.", base_url, token)
+        error_msg = ERROR_MESSAGES["transcription_failed"]
+        if transcribe_error == "timeout":
+            error_msg = ERROR_MESSAGES["timeout"]
+        await send_message(from_number, error_msg, base_url, token)
 
     # Remove do banco
     await remove_pending_audio(message_id)
 
 
-async def download_audio_via_uazapi(base_url: str, token: str, message_id: str) -> bytes | None:
+async def download_audio_via_uazapi(base_url: str, token: str, message_id: str) -> tuple[bytes | None, str | None]:
     """
     Baixa o áudio usando o endpoint /message/download da UAZAPI
+    Retorna (bytes, error_type) onde error_type pode ser "timeout", "failed" ou None
     """
     try:
         async with httpx.AsyncClient(timeout=120) as client:
@@ -286,14 +310,14 @@ async def download_audio_via_uazapi(base_url: str, token: str, message_id: str) 
 
             if response.status_code != 200:
                 print(f"Erro ao obter URL do áudio: {response.status_code} - {response.text}")
-                return None
+                return None, "failed"
 
             result = response.json()
             file_url = result.get("fileURL")
 
             if not file_url:
                 print(f"URL do arquivo não encontrada na resposta: {result}")
-                return None
+                return None, "failed"
 
             print(f"URL do áudio obtida: {file_url}")
 
@@ -301,19 +325,23 @@ async def download_audio_via_uazapi(base_url: str, token: str, message_id: str) 
 
             if audio_response.status_code == 200:
                 print(f"Áudio baixado: {len(audio_response.content)} bytes")
-                return audio_response.content
+                return audio_response.content, None
             else:
                 print(f"Erro ao baixar áudio: {audio_response.status_code}")
-                return None
+                return None, "failed"
 
+    except httpx.TimeoutException:
+        print("Timeout ao baixar áudio")
+        return None, "timeout"
     except Exception as e:
         print(f"Erro ao baixar áudio: {e}")
-        return None
+        return None, "failed"
 
 
-async def transcribe_audio(audio_bytes: bytes) -> str | None:
+async def transcribe_audio(audio_bytes: bytes) -> tuple[str | None, str | None]:
     """
     Transcreve o áudio usando Google Gemini
+    Retorna (transcription, error_type) onde error_type pode ser "timeout", "failed" ou None
     """
     try:
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_file:
@@ -330,14 +358,21 @@ async def transcribe_audio(audio_bytes: bytes) -> str | None:
             ])
 
             audio_file.delete()
-            return response.text.strip() if response.text else None
+
+            if response.text:
+                return response.text.strip(), None
+            else:
+                return None, "failed"
 
         finally:
             os.unlink(temp_path)
 
+    except TimeoutError:
+        print("Timeout na transcrição")
+        return None, "timeout"
     except Exception as e:
         print(f"Erro na transcrição: {e}")
-        return None
+        return None, "failed"
 
 
 async def send_message(to: str, text: str, base_url: str, token: str):
