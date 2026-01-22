@@ -211,12 +211,12 @@ async def send_confirmation_buttons(chat_id: str, message_id: str, base_url: str
             payload = {
                 "number": from_number,
                 "type": "button",
-                "text": "Recebi seu áudio! Deseja que eu faça a transcrição?",
+                "text": "Recebi seu áudio! Deseja que eu faça a transcrição?\n\n_Importante: suas mensagens serão apagadas após 24 horas._",
                 "choices": [
                     f"Sim, transcrever|sim_{message_id}",
                     f"Não, obrigado|nao_{message_id}"
                 ],
-                "footerText": "A transcrição será feita por IA"
+                "footerText": "Transcrição por IA"
             }
 
             response = await client.post(url, json=payload, headers=headers)
