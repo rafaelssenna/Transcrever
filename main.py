@@ -1,5 +1,6 @@
 import os
 import random
+import asyncio
 import tempfile
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
@@ -180,9 +181,15 @@ async def webhook(request: Request):
 
         # Verifica se já aceitou os termos
         if await has_seen_terms(chat_id):
-            # Já aceitou os termos: transcreve direto
-            await process_transcription(chat_id, message_id, base_url, token)
-            return {"status": "ok", "action": "transcribed"}
+            # Já aceitou os termos: salva na fila e processa após delay
+            already_has_pending = await has_pending_audio(chat_id)
+            await save_pending_audio(chat_id, message_id, base_url, token)
+
+            if not already_has_pending:
+                # Primeiro áudio da fila: inicia o processo de coleta
+                asyncio.create_task(process_queue_after_delay(chat_id, base_url, token))
+
+            return {"status": "ok", "action": "queued_for_processing"}
 
         # Ainda não aceitou - salva o áudio pendente
         await save_pending_audio(chat_id, message_id, base_url, token)
@@ -365,6 +372,36 @@ async def mark_terms_seen(chat_id: str):
             session.add(user_terms)
             await session.commit()
             print(f"Termos marcados como vistos para: {chat_id}")
+
+
+async def process_queue_after_delay(chat_id: str, base_url: str, token: str, delay_seconds: int = 15):
+    """
+    Aguarda um tempo para coletar mais áudios e depois processa toda a fila
+    """
+    print(f"Aguardando {delay_seconds}s para coletar mais áudios de {chat_id}...")
+    await asyncio.sleep(delay_seconds)
+
+    # Busca todos os áudios pendentes
+    pending_audios = await get_all_pending_audios(chat_id)
+    num_audios = len(pending_audios)
+
+    if num_audios == 0:
+        print(f"Nenhum áudio pendente para {chat_id}")
+        return
+
+    print(f"Processando {num_audios} áudio(s) de {chat_id}")
+
+    from_number = chat_id.replace("@s.whatsapp.net", "")
+
+    # Envia mensagem de processamento apenas uma vez
+    if num_audios == 1:
+        await send_message(from_number, get_error_message("processing"), base_url, token)
+    else:
+        await send_message(from_number, f"Transcrevendo {num_audios} áudios, aguarde...", base_url, token)
+
+    # Transcreve todos
+    for pending in pending_audios:
+        await process_transcription(chat_id, pending.message_id, pending.base_url, pending.token, show_processing=False)
 
 
 async def send_confirmation_buttons(chat_id: str, message_id: str, base_url: str, token: str):
