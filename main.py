@@ -220,10 +220,20 @@ async def handle_button_response(message: dict, base_url: str, token: str):
 
         # Busca TODOS os áudios pendentes e transcreve
         pending_audios = await get_all_pending_audios(chat_id)
-        print(f"Transcrevendo {len(pending_audios)} áudio(s) pendente(s)")
+        num_audios = len(pending_audios)
+        print(f"Transcrevendo {num_audios} áudio(s) pendente(s)")
 
-        for pending in pending_audios:
-            await process_transcription(chat_id, pending.message_id, pending.base_url, pending.token)
+        if num_audios > 0:
+            from_number = chat_id.replace("@s.whatsapp.net", "")
+            # Envia mensagem de processamento apenas uma vez
+            if num_audios == 1:
+                await send_message(from_number, get_error_message("processing"), base_url, token)
+            else:
+                await send_message(from_number, f"Transcrevendo {num_audios} áudios, aguarde...", base_url, token)
+
+            # Transcreve todos sem enviar "processando" novamente
+            for pending in pending_audios:
+                await process_transcription(chat_id, pending.message_id, pending.base_url, pending.token, show_processing=False)
 
     elif button_id.startswith("nao_"):
         # Remove TODOS os áudios pendentes
@@ -408,9 +418,10 @@ Deseja continuar?"""
         print(f"Erro ao enviar botões: {e}")
 
 
-async def process_transcription(chat_id: str, message_id: str, base_url: str, token: str):
+async def process_transcription(chat_id: str, message_id: str, base_url: str, token: str, show_processing: bool = True):
     """
     Processa a transcrição após confirmação do usuário
+    show_processing: se True, envia mensagem "Transcrevendo..." antes de processar
     """
     from_number = chat_id.replace("@s.whatsapp.net", "")
 
@@ -424,8 +435,9 @@ async def process_transcription(chat_id: str, message_id: str, base_url: str, to
         await send_message(from_number, get_error_message("audio_expired"), base_url, token)
         return
 
-    # Avisa que está processando
-    await send_message(from_number, get_error_message("processing"), base_url, token)
+    # Avisa que está processando (só se não tiver sido avisado antes)
+    if show_processing:
+        await send_message(from_number, get_error_message("processing"), base_url, token)
 
     # Baixa o áudio
     audio_bytes, download_error = await download_audio_via_uazapi(base_url, token, message_id)
