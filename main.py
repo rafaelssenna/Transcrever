@@ -70,6 +70,24 @@ ERROR_MESSAGES = {
     ],
 }
 
+# Mensagens para múltiplos áudios (com placeholder {n} para o número)
+MULTIPLE_AUDIO_MESSAGES = [
+    "Eita! {n} áudios de uma vez? Bora trabalhar! Aguarde...",
+    "Wow, {n} áudios! Vou colocar meus fones estéreo digitais...",
+    "Maratona de {n} áudios começando! Preparando os ouvidos...",
+    "{n} áudios na fila! Deixa comigo, já volto com tudo transcrito!",
+    "Recebido! {n} áudios para transcrever. Meus neurônios digitais estão a todo vapor!",
+    "Uau, {n} áudios! Você tá inspirado hoje hein? Aguarde...",
+    "{n} áudios chegaram! Vou ouvir tudo com carinho, já volto!",
+    "Epa! {n} áudios de uma vez? Challenge accepted! Aguarde...",
+]
+
+
+def get_multiple_audio_message(count: int) -> str:
+    """Retorna uma mensagem aleatória para múltiplos áudios"""
+    message = random.choice(MULTIPLE_AUDIO_MESSAGES)
+    return message.format(n=count)
+
 
 def get_error_message(error_type: str) -> str:
     """Retorna uma mensagem aleatória do tipo especificado"""
@@ -236,7 +254,7 @@ async def handle_button_response(message: dict, base_url: str, token: str):
             if num_audios == 1:
                 await send_message(from_number, get_error_message("processing"), base_url, token)
             else:
-                await send_message(from_number, f"Transcrevendo {num_audios} áudios, aguarde...", base_url, token)
+                await send_message(from_number, get_multiple_audio_message(num_audios), base_url, token)
 
             # Transcreve todos sem enviar "processando" novamente
             for pending in pending_audios:
@@ -397,7 +415,7 @@ async def process_queue_after_delay(chat_id: str, base_url: str, token: str, del
     if num_audios == 1:
         await send_message(from_number, get_error_message("processing"), base_url, token)
     else:
-        await send_message(from_number, f"Transcrevendo {num_audios} áudios, aguarde...", base_url, token)
+        await send_message(from_number, get_multiple_audio_message(num_audios), base_url, token)
 
     # Transcreve todos
     for pending in pending_audios:
