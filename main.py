@@ -55,11 +55,10 @@ ERROR_MESSAGES = {
         "Serviço indisponível! Parece que alguém tropeçou no cabo. Já volta!",
     ],
     "cancelled": [
-        "Beleza, não vou transcrever! Seu áudio, suas regras.",
-        "Ok! Guardei meus ouvidos digitais de volta na gaveta.",
-        "Entendido! O áudio permanecerá um mistério.",
-        "Tudo bem! Alguns segredos devem permanecer em áudio.",
-        "Combinado! Vou fingir que não ouvi nada.",
+        "Tudo bem! Se mudar de ideia, é só enviar outro áudio.",
+        "Ok! Respeito sua decisão. Qualquer coisa, estou aqui!",
+        "Entendido! Quando quiser transcrever, é só mandar um áudio.",
+        "Sem problemas! Fico à disposição se precisar.",
     ],
     "processing": [
         "Transcrevendo seu áudio, aguarde...",
@@ -319,13 +318,27 @@ async def send_confirmation_buttons(chat_id: str, message_id: str, base_url: str
                 "token": token
             }
 
+            terms_text = """Olá! Sou o *Papagaio Transcritor*, um bot que transcreve seus áudios usando Inteligência Artificial.
+
+*Como funciona:*
+• Envie um áudio e eu transformo em texto
+• A transcrição é feita por IA (pode conter pequenos erros)
+
+*Termos de Uso:*
+• Seus áudios são processados apenas para transcrição
+• Todas as mensagens são *apagadas após 24 horas*
+• Não armazenamos o conteúdo das transcrições
+• Ao clicar em "Aceitar", você concorda com estes termos
+
+Deseja continuar?"""
+
             payload = {
                 "number": from_number,
                 "type": "button",
-                "text": "Olá! Sou um bot que transcreve áudios usando IA.\n\nDeseja que eu faça a transcrição do seu áudio?\n\n_Importante: suas mensagens serão apagadas após 24 horas._",
+                "text": terms_text,
                 "choices": [
-                    f"Sim, transcrever|sim_{message_id}",
-                    f"Não, obrigado|nao_{message_id}"
+                    f"Aceitar e transcrever|sim_{message_id}",
+                    f"Não aceito|nao_{message_id}"
                 ],
                 "footerText": "Transcrição por IA"
             }
