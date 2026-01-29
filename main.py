@@ -127,7 +127,7 @@ LONG_AUDIO_MESSAGES = [
     "Áudio extenso detectado! Vou precisar de mais café digital pra esse... ☕",
 ]
 
-# Mensagens para áudios curtinhos
+# Mensagens para áudios curtinhos (< 10 seg)
 SHORT_AUDIO_MESSAGES = [
     "Opa, áudio relâmpago! ⚡ Já já sai a transcrição...",
     "Uau, direto ao ponto! Adoro gente objetiva 😄",
@@ -139,9 +139,23 @@ SHORT_AUDIO_MESSAGES = [
     "Econômico nas palavras! Gostei do estilo 😎",
 ]
 
+# Mensagens para áudios médios (30 seg a 1 min)
+MEDIUM_AUDIO_MESSAGES = [
+    "Áudio no ponto certo! 👌 Nem curto nem longo, perfeito!",
+    "Tamanho ideal de áudio! Você manja das coisas 🎯",
+    "Áudio equilibrado como café com leite! ☕ Processando...",
+    "Esse tá no tamanho certo! Tipo episódio de TikTok 📱",
+    "Áudio mediano chegou! Nem 8 nem 80, transcrevendo...",
+    "Tamanho Cachinhos Dourados: nem muito, nem pouco! 🐻",
+    "Áudio de tamanho perfeito! Você é uma pessoa sensata 😌",
+    "Esse é o tamanho que eu gosto! Processando com carinho...",
+]
+
 # Limites de tamanho (aproximados)
-LARGE_AUDIO_SIZE = 5 * 1024 * 1024   # 5MB ~ 5 minutos
-SMALL_AUDIO_SIZE = 100 * 1024        # 100KB ~ 5-10 segundos
+LARGE_AUDIO_SIZE = 5 * 1024 * 1024    # 5MB ~ 5 minutos
+MEDIUM_AUDIO_MIN = 300 * 1024         # 300KB ~ 30 segundos
+MEDIUM_AUDIO_MAX = 1 * 1024 * 1024    # 1MB ~ 1 minuto
+SMALL_AUDIO_SIZE = 100 * 1024         # 100KB ~ 5-10 segundos
 
 
 def get_multiple_audio_message(count: int) -> str:
@@ -164,6 +178,11 @@ def get_long_audio_message() -> str:
 def get_short_audio_message() -> str:
     """Retorna uma mensagem aleatória para áudios curtos"""
     return random.choice(SHORT_AUDIO_MESSAGES)
+
+
+def get_medium_audio_message() -> str:
+    """Retorna uma mensagem aleatória para áudios médios"""
+    return random.choice(MEDIUM_AUDIO_MESSAGES)
 
 
 def get_error_message(error_type: str) -> str:
@@ -766,6 +785,8 @@ async def process_transcription(chat_id: str, message_id: str, base_url: str, to
         await send_message(from_number, get_long_audio_message(), base_url, token)
     elif audio_size < SMALL_AUDIO_SIZE:
         await send_message(from_number, get_short_audio_message(), base_url, token)
+    elif MEDIUM_AUDIO_MIN <= audio_size <= MEDIUM_AUDIO_MAX:
+        await send_message(from_number, get_medium_audio_message(), base_url, token)
 
     # Transcreve
     transcription, transcribe_error = await transcribe_audio(audio_bytes)
