@@ -118,6 +118,18 @@ SUMMARY_MESSAGES = {
     ],
 }
 
+# Mensagens para áudios longos
+LONG_AUDIO_MESSAGES = [
+    "Eita, esse áudio tá grandão hein! 🎵 Vou tentar, mas pode demorar um pouquinho...",
+    "Uau, alguém gravou um podcast! 😅 Deixa eu processar esse áudio longo...",
+    "Esse áudio tá maior que história de pescador! Aguenta aí que vou transcrever...",
+    "Caramba, você mandou um audiobook! 📚 Processando o áudio longo...",
+    "Áudio extenso detectado! Vou precisar de mais café digital pra esse... ☕",
+]
+
+# Limite de tamanho para aviso (5MB ~ 5 minutos de áudio)
+LARGE_AUDIO_SIZE = 5 * 1024 * 1024  # 5MB
+
 
 def get_multiple_audio_message(count: int) -> str:
     """Retorna uma mensagem aleatória para múltiplos áudios"""
@@ -129,6 +141,11 @@ def get_summary_message(msg_type: str) -> str:
     """Retorna uma mensagem aleatória do tipo de resumo especificado"""
     messages = SUMMARY_MESSAGES.get(msg_type, [""])
     return random.choice(messages)
+
+
+def get_long_audio_message() -> str:
+    """Retorna uma mensagem aleatória para áudios longos"""
+    return random.choice(LONG_AUDIO_MESSAGES)
 
 
 def get_error_message(error_type: str) -> str:
@@ -724,6 +741,10 @@ async def process_transcription(chat_id: str, message_id: str, base_url: str, to
         await send_message(from_number, get_error_message(error_type), base_url, token)
         await remove_pending_audio(message_id)
         return None
+
+    # Verifica se o áudio é muito grande e avisa
+    if len(audio_bytes) > LARGE_AUDIO_SIZE:
+        await send_message(from_number, get_long_audio_message(), base_url, token)
 
     # Transcreve
     transcription, transcribe_error = await transcribe_audio(audio_bytes)
