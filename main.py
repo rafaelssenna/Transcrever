@@ -127,8 +127,21 @@ LONG_AUDIO_MESSAGES = [
     "Áudio extenso detectado! Vou precisar de mais café digital pra esse... ☕",
 ]
 
-# Limite de tamanho para aviso (5MB ~ 5 minutos de áudio)
-LARGE_AUDIO_SIZE = 5 * 1024 * 1024  # 5MB
+# Mensagens para áudios curtinhos
+SHORT_AUDIO_MESSAGES = [
+    "Opa, áudio relâmpago! ⚡ Já já sai a transcrição...",
+    "Uau, direto ao ponto! Adoro gente objetiva 😄",
+    "Áudio speedrun detectado! 🏃 Processando...",
+    "Curtinho e grosso! Deixa eu ouvir rapidinho...",
+    "Esse foi rápido hein! Tipo trailer de filme 🎬",
+    "Áudio modo Twitter: curto e direto! Transcrevendo...",
+    "Piscou e já acabou! 👀 Deixa eu ver o que disse...",
+    "Econômico nas palavras! Gostei do estilo 😎",
+]
+
+# Limites de tamanho (aproximados)
+LARGE_AUDIO_SIZE = 5 * 1024 * 1024   # 5MB ~ 5 minutos
+SMALL_AUDIO_SIZE = 100 * 1024        # 100KB ~ 5-10 segundos
 
 
 def get_multiple_audio_message(count: int) -> str:
@@ -146,6 +159,11 @@ def get_summary_message(msg_type: str) -> str:
 def get_long_audio_message() -> str:
     """Retorna uma mensagem aleatória para áudios longos"""
     return random.choice(LONG_AUDIO_MESSAGES)
+
+
+def get_short_audio_message() -> str:
+    """Retorna uma mensagem aleatória para áudios curtos"""
+    return random.choice(SHORT_AUDIO_MESSAGES)
 
 
 def get_error_message(error_type: str) -> str:
@@ -742,9 +760,12 @@ async def process_transcription(chat_id: str, message_id: str, base_url: str, to
         await remove_pending_audio(message_id)
         return None
 
-    # Verifica se o áudio é muito grande e avisa
-    if len(audio_bytes) > LARGE_AUDIO_SIZE:
+    # Verifica tamanho do áudio e manda mensagem apropriada
+    audio_size = len(audio_bytes)
+    if audio_size > LARGE_AUDIO_SIZE:
         await send_message(from_number, get_long_audio_message(), base_url, token)
+    elif audio_size < SMALL_AUDIO_SIZE:
+        await send_message(from_number, get_short_audio_message(), base_url, token)
 
     # Transcreve
     transcription, transcribe_error = await transcribe_audio(audio_bytes)
